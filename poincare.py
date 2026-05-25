@@ -31,7 +31,7 @@ CONFIGS = {
     'square': {
         'p': 4,
         'q': 5,
-        'k': 4,
+        'k': 8,
         'ring_inrad': 0.98
     }
 }
