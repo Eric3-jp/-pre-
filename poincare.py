@@ -5,6 +5,23 @@ from matplotlib.patches import Circle, Polygon
 from matplotlib.collections import PatchCollection
 from itertools import chain
 import warnings
+import sys
+
+# Configuration dictionary for different tessellations
+CONFIGS = {
+    'hex': {
+        'p': 7,
+        'q': 3,
+        'k': 3,
+        'title': '{7, 3} Tessellation'
+    },
+    'tri': {
+        'p': 3,
+        'q': 7,
+        'k': 5,
+        'title': '{3, 7} Tessellation'
+    }
+}
 
 def ortho_centre(p, q):
     """
@@ -215,7 +232,14 @@ def plot_tessellation(p, q, phi=0.0, k=3, colormap='viridis', use_hyperbolic_lin
     return ax
 
 if __name__ == '__main__':
-    # Example: Plot {7,3} tessellation
-    ax = plot_tessellation(7, 3, k=3, colormap='viridis')
-    plt.title("{7, 3} Tessellation")
+    if len(sys.argv) < 2:
+        print("Usage: python poincare.py <config> where <config> is 'tri' or 'hex'")
+        sys.exit(1)
+    config_key = sys.argv[1]
+    if config_key not in CONFIGS:
+        print(f"Error: Invalid config '{config_key}'. Available options: {list(CONFIGS.keys())}")
+        sys.exit(1)
+    cfg = CONFIGS[config_key]
+    ax = plot_tessellation(cfg['p'], cfg['q'], k=cfg['k'], colormap='viridis')
+    plt.title(cfg['title'])
     plt.show()
