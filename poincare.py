@@ -7,17 +7,20 @@ from itertools import chain
 import warnings
 import sys
 
+# Constant macro: whether to fill polygons with color
+FILL_COLOR = False
+
 # Configuration dictionary for different tessellations
 CONFIGS = {
     'hex': {
         'p': 7,
         'q': 3,
-        'k': 5
+        'k': 3
     },
     'tri': {
         'p': 3,
         'q': 7,
-        'k': 10
+        'k': 5
     },
     'square': {
         'p': 4,
@@ -220,12 +223,15 @@ def plot_tessellation(p, q, phi=0.0, k=3, colormap='viridis', use_hyperbolic_lin
         centroid = np.mean(poly, axis=0)
         if np.linalg.norm(centroid) > 1.2:
             continue
-        # Color based on centroid distance
-        color_val = np.linalg.norm(centroid)
-        cmap = plt.get_cmap(colormap)
-        color = cmap(color_val)
+        # Color based on centroid distance (only if FILL_COLOR is True)
+        if FILL_COLOR:
+            color_val = np.linalg.norm(centroid)
+            cmap = plt.get_cmap(colormap)
+            face_color = cmap(color_val)
+        else:
+            face_color = 'none'
         # Create polygon patch
-        poly_patch = Polygon(poly, closed=True, facecolor=color, edgecolor='black', linewidth=0.5)
+        poly_patch = Polygon(poly, closed=True, facecolor=face_color, edgecolor='black', linewidth=0.5)
         patches.append(poly_patch)
     # Add patches to axis
     collection = PatchCollection(patches, match_original=True)
@@ -236,7 +242,7 @@ def plot_tessellation(p, q, phi=0.0, k=3, colormap='viridis', use_hyperbolic_lin
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print("Usage: python poincare.py <config> where <config> is 'tri' or 'hex'")
+        print(f"Usage: python poincare.py <config> where <config> is {', '.join(CONFIGS.keys())}")
         sys.exit(1)
     config_key = sys.argv[1]
     if config_key not in CONFIGS:
