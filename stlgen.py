@@ -79,15 +79,15 @@ def generate_border_mesh(p1, p2, thickness, border_size):
 
 def generate_outer_ring_mesh(ring_inrad, thickness, border_size):
     """Generate an outer ring mesh."""
-    # Create a circle with radius ring_inrad, then create a ring by adding border_size
+    # Create a ring with outer radius 1 and inner radius ring_inrad
     num_points = 100
     theta = np.linspace(0, 2*np.pi, num_points, endpoint=False)
     # Inner circle (ring_inrad)
     x_inner = ring_inrad * np.cos(theta)
     y_inner = ring_inrad * np.sin(theta)
-    # Outer circle (ring_inrad + border_size)
-    x_outer = (ring_inrad + border_size) * np.cos(theta)
-    y_outer = (ring_inrad + border_size) * np.sin(theta)
+    # Outer circle (radius 1)
+    x_outer = 1.0 * np.cos(theta)
+    y_outer = 1.0 * np.sin(theta)
     
     # Create ring polygon: outer circle clockwise, inner circle counter-clockwise
     vertices_2d = []
