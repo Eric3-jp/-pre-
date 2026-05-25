@@ -215,8 +215,10 @@ def plot_tessellation(p, q, phi=0.0, k=3, colormap='viridis', use_hyperbolic_lin
         fig, ax = plt.subplots(figsize=(8, 8))
         ax.set_aspect('equal')
         ax.axis('off')
+    # Scale BORDER_SIZE for matplotlib linewidth (since linewidth is in points, not world units)
+    linewidth = max(0.5, BORDER_SIZE * 20)
     # Draw unit circle
-    unit_circle = Circle((0, 0), 1, fill=False, edgecolor='black', linewidth=1)
+    unit_circle = Circle((0, 0), 1, fill=False, edgecolor='black', linewidth=linewidth)
     ax.add_patch(unit_circle)
     # Get polygons
     polygons = hyperbolic_tessellation(p, q, phi, k)
@@ -235,7 +237,7 @@ def plot_tessellation(p, q, phi=0.0, k=3, colormap='viridis', use_hyperbolic_lin
         else:
             face_color = 'none'
         # Create polygon patch
-        poly_patch = Polygon(poly, closed=True, facecolor=face_color, edgecolor='black', linewidth=0.5)
+        poly_patch = Polygon(poly, closed=True, facecolor=face_color, edgecolor='black', linewidth=linewidth)
         patches.append(poly_patch)
     # Add patches to axis
     collection = PatchCollection(patches, match_original=True)

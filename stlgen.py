@@ -1,8 +1,9 @@
 import numpy as np
 
-def generate_stl(polygons, filename, thickness=0.1, border_size=0.02):
+def generate_stl(polygons, filename, thickness=0.1, border_size=0.02, num_segments=100):
     """
-    Generate STL file from list of 2D polygons by extruding their borders (镂空).
+    Generate STL file from list of 2D polygons by extruding their borders (镂空),
+    plus an outer circular border for strength.
     """
     with open(filename, 'w') as f:
         f.write("solid poincare\n")
@@ -23,7 +24,32 @@ def generate_stl(polygons, filename, thickness=0.1, border_size=0.02):
                 seen_edges.add(edge_key)
                 # Generate rectangular border around this edge
                 generate_border(f, p1, p2, thickness, border_size)
+        # Add outer circular border
+        generate_circular_border(f, 1.0 - border_size, 1.0, thickness, num_segments)
         f.write("endsolid poincare\n")
+
+def generate_circular_border(f, inner_radius, outer_radius, thickness, num_segments):
+    """Generate a circular border (annulus) and write to STL file."""
+    # Generate points on inner and outer circles
+    theta = np.linspace(0, 2 * np.pi, num_segments, endpoint=False)
+    inner_x = inner_radius * np.cos(theta)
+    inner_y = inner_radius * np.sin(theta)
+    outer_x = outer_radius * np.cos(theta)
+    outer_y = outer_radius * np.sin(theta)
+    # Extrude the annulus
+    for i in range(num_segments):
+        p_inner1 = np.array([inner_x[i], inner_y[i]])
+        p_inner2 = np.array([inner_x[(i+1)%num_segments], inner_y[(i+1)%num_segments]])
+        p_outer1 = np.array([outer_x[i], outer_y[i]])
+        p_outer2 = np.array([outer_x[(i+1)%num_segments], outer_y[(i+1)%num_segments]])
+        # Top face (z=thickness)
+        write_quad(f, p_inner1, p_outer1, p_outer2, p_inner2, thickness)
+        # Bottom face (z=0)
+        write_quad(f, p_inner1, p_inner2, p_outer2, p_outer1, 0.0)
+        # Inner vertical face
+        write_quad(f, p_inner1, p_inner1, p_inner2, p_inner2, None, z1=0.0, z2=thickness)
+        # Outer vertical face
+        write_quad(f, p_outer1, p_outer2, p_outer2, p_outer1, None, z1=0.0, z2=thickness)
 
 def generate_border(f, p1, p2, thickness, border_size):
     """Generate a rectangular border around an edge and write to STL."""
