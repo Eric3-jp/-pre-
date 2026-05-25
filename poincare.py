@@ -9,6 +9,8 @@ import sys
 
 # Constant macro: whether to fill polygons with color
 FILL_COLOR = False
+# Constant macro: whether to generate STL model
+CREATE_MODEL = True
 
 # Configuration dictionary for different tessellations
 CONFIGS = {
@@ -249,6 +251,12 @@ if __name__ == '__main__':
         print(f"Error: Invalid config '{config_key}'. Available options: {list(CONFIGS.keys())}")
         sys.exit(1)
     cfg = CONFIGS[config_key]
+    polygons = hyperbolic_tessellation(cfg['p'], cfg['q'], k=cfg['k'])
+    if CREATE_MODEL:
+        import stlgen
+        stl_filename = f"poincare_{config_key}.stl"
+        stlgen.generate_stl(polygons, stl_filename)
+        print(f"STL file generated: {stl_filename}")
     ax = plot_tessellation(cfg['p'], cfg['q'], k=cfg['k'], colormap='viridis')
     plt.title("Tessellation")
     plt.show()
