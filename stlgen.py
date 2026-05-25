@@ -1,6 +1,6 @@
 import numpy as np
 
-def generate_stl(polygons, filename, thickness=0.1, border_size=0.02, num_segments=100):
+def generate_stl(polygons, filename, thickness=0.1, border_size=0.02, ring_inrad=0.98, num_segments=100):
     """
     Generate STL file from list of 2D polygons by extruding their borders (镂空),
     plus an outer circular border for strength.
@@ -11,7 +11,7 @@ def generate_stl(polygons, filename, thickness=0.1, border_size=0.02, num_segmen
         for poly in polygons:
             # Skip polygons outside unit circle
             centroid = np.mean(poly, axis=0)
-            if np.linalg.norm(centroid) > 1.0:
+            if np.linalg.norm(centroid) > ring_inrad:
                 continue
             n = len(poly)
             for i in range(n):
@@ -25,7 +25,7 @@ def generate_stl(polygons, filename, thickness=0.1, border_size=0.02, num_segmen
                 # Generate rectangular border around this edge
                 generate_border(f, p1, p2, thickness, border_size)
         # Add outer circular border
-        generate_circular_border(f, 1.0 - border_size, 1.0, thickness, num_segments)
+        generate_circular_border(f, ring_inrad, 1.0, thickness, num_segments)
         f.write("endsolid poincare\n")
 
 def generate_circular_border(f, inner_radius, outer_radius, thickness, num_segments):

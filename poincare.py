@@ -19,17 +19,20 @@ CONFIGS = {
     'hex': {
         'p': 7,
         'q': 3,
-        'k': 3
+        'k': 3,
+        'ring_inrad': 0.98
     },
     'tri': {
         'p': 3,
         'q': 7,
-        'k': 5
+        'k': 9,
+        'ring_inrad': 0.96
     },
     'square': {
         'p': 4,
         'q': 5,
-        'k': 4
+        'k': 4,
+        'ring_inrad': 0.98
     }
 }
 
@@ -259,7 +262,12 @@ if __name__ == '__main__':
     if CREATE_MODEL:
         import stlgen
         stl_filename = f"poincare_{config_key}.stl"
-        stlgen.generate_stl(polygons, stl_filename, border_size=BORDER_SIZE)
+        stlgen.generate_stl(
+            polygons, 
+            stl_filename, 
+            border_size=BORDER_SIZE,
+            ring_inrad=cfg['ring_inrad']
+        )
         print(f"STL file generated: {stl_filename}")
     ax = plot_tessellation(cfg['p'], cfg['q'], k=cfg['k'], colormap='viridis')
     plt.title("Tessellation")
