@@ -12,14 +12,17 @@ CONFIGS = {
     'hex': {
         'p': 7,
         'q': 3,
-        'k': 3,
-        'title': '{7, 3} Tessellation'
+        'k': 5
     },
     'tri': {
         'p': 3,
         'q': 7,
-        'k': 5,
-        'title': '{3, 7} Tessellation'
+        'k': 10
+    },
+    'square': {
+        'p': 4,
+        'q': 5,
+        'k': 4
     }
 }
 
@@ -241,5 +244,5 @@ if __name__ == '__main__':
         sys.exit(1)
     cfg = CONFIGS[config_key]
     ax = plot_tessellation(cfg['p'], cfg['q'], k=cfg['k'], colormap='viridis')
-    plt.title(cfg['title'])
+    plt.title("Tessellation")
     plt.show()
