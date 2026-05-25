@@ -11,6 +11,8 @@ import sys
 FILL_COLOR = False
 # Constant macro: whether to generate STL model
 CREATE_MODEL = True
+# Constant macro: size of the border lines
+BORDER_SIZE = 0.02
 
 # Configuration dictionary for different tessellations
 CONFIGS = {
