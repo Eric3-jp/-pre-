@@ -25,7 +25,7 @@ CONFIGS = {
     'tri': {
         'p': 3,
         'q': 7,
-        'k': 9,
+        'k': 7,
         'ring_inrad': 0.96
     },
     'square': {
