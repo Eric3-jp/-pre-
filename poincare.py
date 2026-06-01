@@ -19,20 +19,20 @@ CONFIGS = {
     'hex': {
         'p': 7,
         'q': 3,
-        'k': 3,
-        'ring_inrad': 0.98
+        'k': 6,
+        'ring_inrad': 0.96
     },
     'tri': {
         'p': 3,
         'q': 7,
-        'k': 7,
+        'k': 9,
         'ring_inrad': 0.96
     },
     'square': {
         'p': 4,
         'q': 5,
         'k': 8,
-        'ring_inrad': 0.98
+        'ring_inrad': 0.96
     }
 }
 

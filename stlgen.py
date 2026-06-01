@@ -1,7 +1,7 @@
 import numpy as np
 import trimesh
 
-def generate_stl(polygons, filename, thickness=0.1, border_size=0.02, ring_inrad=None):
+def generate_stl(polygons, filename, thickness=0.05, border_size=0.02, ring_inrad=None):
     """
     Generate STL file from list of 2D polygons by extruding their borders (镂空) using trimesh for robustness.
     """
@@ -79,29 +79,20 @@ def generate_border_mesh(p1, p2, thickness, border_size):
 
 def generate_outer_ring_mesh(ring_inrad, thickness, border_size):
     """Generate an outer ring mesh."""
-    # Create a ring with outer radius 1 and inner radius ring_inrad
     num_points = 100
     theta = np.linspace(0, 2*np.pi, num_points, endpoint=False)
-    # Inner circle (ring_inrad)
-    x_inner = ring_inrad * np.cos(theta)
-    y_inner = ring_inrad * np.sin(theta)
-    # Outer circle (radius 1)
-    x_outer = 1.0 * np.cos(theta)
-    y_outer = 1.0 * np.sin(theta)
+    x = 1.0 * np.cos(theta)
+    y = 1.0 * np.sin(theta)
+    outer_circle = np.column_stack([x, y])
     
-    # Create ring polygon: outer circle clockwise, inner circle counter-clockwise
-    vertices_2d = []
-    # Add outer circle
-    for x, y in zip(x_outer, y_outer):
-        vertices_2d.append([x, y])
-    # Add inner circle in reverse
-    for x, y in zip(reversed(x_inner), reversed(y_inner)):
-        vertices_2d.append([x, y])
-    # Close the loop
-    vertices_2d.append(vertices_2d[0])
-    vertices_2d = np.array(vertices_2d)
+    meshes = []
+    for i in range(num_points):
+        p1 = outer_circle[i]
+        p2 = outer_circle[(i + 1) % num_points]
+        border_mesh = generate_border_mesh(p1, p2, thickness, border_size)
+        if border_mesh is not None:
+            meshes.append(border_mesh)
     
-    # Extrude 2D polygon to 3D using trimesh
-    path = trimesh.load_path(vertices_2d)
-    mesh = path.extrude(thickness)
-    return mesh
+    if meshes:
+        return trimesh.util.concatenate(meshes)
+    return None
