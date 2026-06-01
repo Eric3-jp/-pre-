@@ -1,8 +1,6 @@
 import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.textpath import TextPath
 from matplotlib.font_manager import FontProperties
-from matplotlib.path import Path
 import sys
 
 def find_chinese_font():
@@ -66,34 +64,3 @@ def text2lines(text, char_spacing=0.15, y_offset=0.0):
         start_x += (max_x - min_x) * scale + char_spacing
     
     return all_lines
-
-def plotlines(lines, ax=None):
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 8))
-        ax.set_aspect('equal')
-    
-    for line in lines:
-        (sx, sy), (ex, ey) = line
-        ax.plot([sx, ex], [sy, ey], 'k-', linewidth=1.5)
-    
-    ax.set_xlim(-1.1, 1.1)
-    ax.set_ylim(-1.1, 1.1)
-    ax.grid(True, alpha=0.3)
-    
-    return ax
-
-if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("Usage: python char2lines.py <text>")
-        print("Example: python char2lines.py 你好")
-        sys.exit(1)
-    
-    text = sys.argv[1]
-    print(f"Converting text: {text}")
-    
-    lines = text2lines(text)
-    print(f"Generated {len(lines)} line segments")
-    
-    ax = plotlines(lines)
-    plt.title(f"Text: {text}")
-    plt.show()
