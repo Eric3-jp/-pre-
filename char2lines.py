@@ -18,7 +18,7 @@ def find_chinese_font():
             continue
     return FontProperties()
 
-def text2lines(text, char_spacing=0.15, y_offset=0.0):
+def text2lines(text, char_spacing=0.15, y_offset=0.0, scale_multiplier=1.0):
     font = find_chinese_font()
     
     all_lines = []
@@ -45,8 +45,9 @@ def text2lines(text, char_spacing=0.15, y_offset=0.0):
     total_spacing = char_spacing * (len(char_bboxes) - 1)
     total_needed = total_width + total_spacing
     
-    scale = 1.8 / total_needed if total_needed > 1.8 else 1.0
-    start_x = -0.9
+    base_scale = 1.8 / total_needed if total_needed > 1.8 else 1.0
+    scale = base_scale * scale_multiplier
+    start_x = -0.9 * scale_multiplier
     
     for path, (min_x, max_x, min_y, max_y) in zip(char_paths, char_bboxes):
         offset_x = start_x - min_x * scale

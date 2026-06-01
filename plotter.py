@@ -33,10 +33,12 @@ def plotlinecurves(poincare_curves, ax=None, title=None):
             center = curve['center']
             radius = curve['radius']
             angles = curve['angles']
-            theta = np.linspace(angles[0], angles[1], 50)
+            theta = np.linspace(angles[0], angles[1], 100)
             x = center[0] + radius * np.cos(theta)
             y = center[1] + radius * np.sin(theta)
-            ax.plot(x, y, 'k-', linewidth=1.5)
+            r_sq = x*x + y*y
+            inside = r_sq <= 1.0001
+            ax.plot(x[inside], y[inside], 'k-', linewidth=1.5)
     
     unit_circle = Circle((0, 0), 1, fill=False, edgecolor='blue', linewidth=1, linestyle='--')
     ax.add_patch(unit_circle)
