@@ -47,8 +47,8 @@ def text2lines(text, char_spacing=0.15, y_offset=0.0):
     total_spacing = char_spacing * (len(char_bboxes) - 1)
     total_needed = total_width + total_spacing
     
-    scale = 1.6 / total_needed if total_needed > 1.6 else 1.0
-    start_x = -0.8
+    scale = 1.8 / total_needed if total_needed > 1.8 else 1.0
+    start_x = -0.9
     
     for path, (min_x, max_x, min_y, max_y) in zip(char_paths, char_bboxes):
         offset_x = start_x - min_x * scale
