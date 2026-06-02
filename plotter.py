@@ -6,8 +6,10 @@ from matplotlib import font_manager
 from matplotlib.font_manager import FontProperties
 from matplotlib.patches import Circle
 
+BASE_DIR = Path(__file__).resolve().parent
 WINDOWS_FONT_DIR = Path("C:/Windows/Fonts")
 FONT_FILE_CANDIDATES = (
+    BASE_DIR / "fonts" / "SourceHanSerifSC-Heavy.ttf",
     WINDOWS_FONT_DIR / "simhei.ttf",
     WINDOWS_FONT_DIR / "msyh.ttc",
     WINDOWS_FONT_DIR / "simsun.ttc",

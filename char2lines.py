@@ -4,8 +4,10 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+BASE_DIR = Path(__file__).resolve().parent
 WINDOWS_FONT_DIR = Path("C:/Windows/Fonts")
 FONT_FILE_CANDIDATES = (
+    BASE_DIR / "fonts" / "SourceHanSerifSC-Heavy.ttf",
     WINDOWS_FONT_DIR / "simhei.ttf",
     WINDOWS_FONT_DIR / "msyh.ttc",
     WINDOWS_FONT_DIR / "simsun.ttc",
@@ -31,7 +33,7 @@ def find_chinese_font_path():
 def load_font(size=FONT_SIZE):
     font_path = find_chinese_font_path()
     if font_path is None:
-        return ImageFont.load_default()
+        raise RuntimeError("Chinese font file not found: fonts/SourceHanSerifSC-Heavy.ttf")
     return ImageFont.truetype(str(font_path), size=size)
 
 
