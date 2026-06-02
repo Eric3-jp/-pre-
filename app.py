@@ -8,9 +8,9 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle, Polygon
 from PIL import Image
 
-from plotter import plotlinecurves, set_title
+from plotter import plot_fisheye_lines, set_title
 from poincare import CONFIGS, hyperbolic_tessellation
-from poincare_lines import text_to_poincare
+from poincare_lines import text_to_fisheye
 
 APP_TITLE = "Poincaré 双曲镶嵌生成器"
 MODES = ["基础镶嵌生成", "文字投影", "图片处理"]
@@ -146,6 +146,14 @@ def render_text_mode():
         scale_multiplier = st.slider("文字缩放", 0.5, 3.0, 1.0, 0.1)
         y_offset = st.slider("垂直偏移", -1.0, 1.0, 0.0, 0.1)
         char_spacing = st.slider("字符间距", 0.05, 0.3, 0.15, 0.01)
+        fisheye_strength = st.slider(
+            "鱼眼强度",
+            0.0,
+            4.0,
+            1.6,
+            0.1,
+            help="0 表示不变形，数值越大越接近鱼眼镜头的径向压缩效果。",
+        )
 
     with preview:
         st.subheader("投影结果")
@@ -155,18 +163,19 @@ def render_text_mode():
 
         try:
             with st.spinner("投影处理中..."):
-                _, poincare_curves = text_to_poincare(
+                _, fisheye_lines = text_to_fisheye(
                     text_input.strip(),
                     scale_multiplier=scale_multiplier,
                     char_spacing=char_spacing,
                     y_offset=y_offset,
+                    strength=fisheye_strength,
                 )
                 fig, ax = plt.subplots(figsize=(8, 8), dpi=120)
                 ax.set_aspect("equal")
-                plotlinecurves(poincare_curves, ax=ax, title=f"'{text_input}' 的双曲投影")
+                plot_fisheye_lines(fisheye_lines, ax=ax, title=f"'{text_input}' 的鱼眼投影")
                 st.pyplot(fig)
                 plt.close(fig)
-            st.success("文字投影完成。")
+            st.success("鱼眼投影完成。")
         except Exception as exc:
             st.error(f"处理失败：{exc}")
 

@@ -59,6 +59,29 @@ def plotlines(lines, ax=None, title=None):
     return ax
 
 
+def plot_fisheye_lines(polylines, ax=None, title=None):
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.set_aspect("equal")
+
+    for polyline in polylines:
+        points = np.array(polyline, dtype=float)
+        if len(points) < 2:
+            continue
+        ax.plot(points[:, 0], points[:, 1], "k-", linewidth=1.5)
+
+    unit_circle = Circle((0, 0), 1, fill=False, edgecolor="blue", linewidth=1, linestyle="--")
+    ax.add_patch(unit_circle)
+    ax.set_xlim(-1.1, 1.1)
+    ax.set_ylim(-1.1, 1.1)
+    ax.set_aspect("equal")
+    ax.grid(True, alpha=0.3)
+    if title:
+        set_title(ax, title)
+
+    return ax
+
+
 def plotlinecurves(poincare_curves, ax=None, title=None):
     if ax is None:
         fig, ax = plt.subplots(figsize=(8, 8))
