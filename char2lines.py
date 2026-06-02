@@ -1,23 +1,49 @@
+from pathlib import Path
+
 import numpy as np
 from matplotlib.font_manager import FontProperties, findfont
 from matplotlib.textpath import TextPath
 
-PREFERRED_FONTS = (
+WINDOWS_FONT_DIR = Path("C:/Windows/Fonts")
+FONT_FILE_CANDIDATES = (
+    WINDOWS_FONT_DIR / "simhei.ttf",
+    WINDOWS_FONT_DIR / "simsun.ttc",
+    WINDOWS_FONT_DIR / "simkai.ttf",
+    WINDOWS_FONT_DIR / "simfang.ttf",
+    WINDOWS_FONT_DIR / "msyh.ttc",
+    WINDOWS_FONT_DIR / "Source Han Serif SC Heavy (TrueType).ttf",
+    Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+    Path("/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc"),
+    Path("/System/Library/Fonts/PingFang.ttc"),
+)
+PREFERRED_FAMILIES = (
     "Microsoft YaHei",
     "SimHei",
     "SimSun",
+    "KaiTi",
+    "FangSong",
+    "Noto Sans CJK SC",
+    "Source Han Sans SC",
+    "PingFang SC",
     "Arial Unicode MS",
 )
 
 
 def find_chinese_font():
-    for family in PREFERRED_FONTS:
+    for font_path in FONT_FILE_CANDIDATES:
+        if font_path.exists():
+            return FontProperties(fname=str(font_path))
+
+    for family in PREFERRED_FAMILIES:
         font = FontProperties(family=family)
         try:
-            findfont(font, fallback_to_default=False)
-            return font
+            font_path = findfont(font, fallback_to_default=False)
         except ValueError:
             continue
+
+        if font_path and Path(font_path).exists():
+            return FontProperties(fname=font_path)
+
     return FontProperties()
 
 
