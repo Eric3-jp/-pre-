@@ -76,7 +76,7 @@ def render_tessellation_mode():
         )
         cfg = CONFIGS[config_key]
         depth = st.slider("迭代次数", 1, 8, min(cfg["k"], 8), help="数值越大，图案层级越多，但生成也越慢。")
-        fill_color = st.checkbox("填充颜色", False)
+        fill_color = st.checkbox("填充颜色", True)
 
     with preview:
         st.subheader("预览")

@@ -173,13 +173,27 @@ def central_polygon(p, q, phi=0.0):
     vertices = rot_matrix @ np.array([x, y])
     return list(vertices.T)
 
-def polygon_round(polygon_vertices, tol=1e-10):
+def polygon_key(polygon_vertices, tol=1e-7):
+    """
+    Build an orientation-insensitive key for approximate polygon de-duplication.
+    """
+    decimals = max(0, int(-np.log10(tol)))
+    rounded = [tuple(np.round(v, decimals)) for v in polygon_vertices]
+    candidates = []
+    n = len(rounded)
+    for seq in (rounded, list(reversed(rounded))):
+        for shift in range(n):
+            candidates.append(tuple(seq[shift:] + seq[:shift]))
+    return min(candidates)
+
+
+def polygon_round(polygon_vertices, tol=1e-7):
     """
     Round polygon vertices to tolerance.
     """
     return [tuple(np.round(v, int(-np.log10(tol)))) for v in polygon_vertices]
 
-def polygon_union(polygons, tol=1e-10):
+def polygon_union(polygons, tol=1e-7):
     """
     Remove duplicate polygons from a list.
     """
@@ -188,26 +202,53 @@ def polygon_union(polygons, tol=1e-10):
     unique = []
     seen = set()
     for poly in polygons:
-        rounded = tuple(polygon_round(poly, tol))
-        # Also check reversed order to account for different orientations
-        reversed_rounded = tuple(reversed(rounded))
-        if rounded not in seen and reversed_rounded not in seen:
-            seen.add(rounded)
+        key = polygon_key(poly, tol)
+        if key not in seen:
+            seen.add(key)
             unique.append(poly)
     return unique
 
-def hyperbolic_tessellation(p, q, phi=0.0, k=3, tol=1e-10):
+
+def polygon_is_expandable(poly, expand_radius=0.995):
+    vertices = np.asarray(poly, dtype=float)
+    if not np.all(np.isfinite(vertices)):
+        return False
+    centroid = np.mean(vertices, axis=0)
+    return np.linalg.norm(centroid) < expand_radius
+
+
+def hyperbolic_tessellation(p, q, phi=0.0, k=3, tol=1e-7, expand_radius=0.995):
     """
     Generate hyperbolic tessellation {p, q} up to recursion depth k.
-    Returns list of polygons (each polygon is list of vertices).
+    Uses frontier expansion so old polygons are not repeatedly expanded.
     """
     initial = central_polygon(p, q, phi)
     all_polygons = [initial]
+    frontier = [initial]
+    seen = {polygon_key(initial, tol)}
+
     for _ in range(k):
-        new_polys = []
-        for poly in all_polygons:
-            new_polys.extend(invert_polygon(poly))
-        all_polygons = polygon_union(all_polygons + new_polys, tol)
+        next_frontier = []
+        for poly in frontier:
+            if not polygon_is_expandable(poly, expand_radius):
+                continue
+
+            for candidate in invert_polygon(poly):
+                if not polygon_is_expandable(candidate, expand_radius=1.2):
+                    continue
+
+                key = polygon_key(candidate, tol)
+                if key in seen:
+                    continue
+
+                seen.add(key)
+                all_polygons.append(candidate)
+                next_frontier.append(candidate)
+
+        if not next_frontier:
+            break
+        frontier = next_frontier
+
     return all_polygons
 
 def plot_tessellation(p, q, phi=0.0, k=3, colormap='viridis', use_hyperbolic_lines=True, ax=None):
