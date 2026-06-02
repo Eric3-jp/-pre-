@@ -74,6 +74,8 @@ def render_tessellation_mode():
             format_func=lambda key: f"{key} (p={CONFIGS[key]['p']}, q={CONFIGS[key]['q']})",
             help="选择预置的双曲镶嵌类型。",
         )
+        cfg = CONFIGS[config_key]
+        depth = st.slider("迭代次数", 1, 8, min(cfg["k"], 8), help="数值越大，图案层级越多，但生成也越慢。")
         fill_color = st.checkbox("填充颜色", False)
 
     with preview:
@@ -81,16 +83,18 @@ def render_tessellation_mode():
         try:
             cfg = CONFIGS[config_key]
             with st.spinner("生成中..."):
-                polygons = get_tessellation(cfg["p"], cfg["q"], 0.0, min(cfg["k"], 8))
+                polygons = get_tessellation(cfg["p"], cfg["q"], 0.0, depth)
                 fig = create_tessellation_figure(polygons, fill_color, 0.02)
                 st.pyplot(fig)
                 plt.close(fig)
 
-            col_a, col_b = st.columns(2)
+            col_a, col_b, col_c = st.columns(3)
             col_a.metric("多边形数量", len(polygons))
-            col_b.metric("配置", f"({cfg['p']}, {cfg['q']})")
+            col_b.metric("迭代次数", depth)
+            col_c.metric("配置", f"({cfg['p']}, {cfg['q']})")
         except Exception as exc:
             st.error(f"生成失败：{exc}")
+
 
 def render_text_mode():
     st.header("文字投影到双曲空间")
