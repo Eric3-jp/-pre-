@@ -1,91 +1,104 @@
 from pathlib import Path
 
+import cv2
 import numpy as np
-from matplotlib.font_manager import FontProperties, findfont
-from matplotlib.textpath import TextPath
+from PIL import Image, ImageDraw, ImageFont
 
 WINDOWS_FONT_DIR = Path("C:/Windows/Fonts")
 FONT_FILE_CANDIDATES = (
     WINDOWS_FONT_DIR / "simhei.ttf",
+    WINDOWS_FONT_DIR / "msyh.ttc",
     WINDOWS_FONT_DIR / "simsun.ttc",
     WINDOWS_FONT_DIR / "simkai.ttf",
     WINDOWS_FONT_DIR / "simfang.ttf",
-    WINDOWS_FONT_DIR / "msyh.ttc",
     WINDOWS_FONT_DIR / "Source Han Serif SC Heavy (TrueType).ttf",
     Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
     Path("/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc"),
     Path("/System/Library/Fonts/PingFang.ttc"),
 )
-PREFERRED_FAMILIES = (
-    "Microsoft YaHei",
-    "SimHei",
-    "SimSun",
-    "KaiTi",
-    "FangSong",
-    "Noto Sans CJK SC",
-    "Source Han Sans SC",
-    "PingFang SC",
-    "Arial Unicode MS",
-)
+CANVAS_SIZE = 700
+FONT_SIZE = 420
+MARGIN = 50
 
 
-def find_chinese_font():
+def find_chinese_font_path():
     for font_path in FONT_FILE_CANDIDATES:
         if font_path.exists():
-            return FontProperties(fname=str(font_path))
+            return font_path
+    return None
 
-    for family in PREFERRED_FAMILIES:
-        font = FontProperties(family=family)
-        try:
-            font_path = findfont(font, fallback_to_default=False)
-        except ValueError:
+
+def load_font(size=FONT_SIZE):
+    font_path = find_chinese_font_path()
+    if font_path is None:
+        return ImageFont.load_default()
+    return ImageFont.truetype(str(font_path), size=size)
+
+
+def render_text_mask(text):
+    font = load_font()
+    scratch = Image.new("L", (1, 1), 0)
+    scratch_draw = ImageDraw.Draw(scratch)
+    bbox = scratch_draw.textbbox((0, 0), text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+
+    image_width = max(CANVAS_SIZE, text_width + MARGIN * 2)
+    image_height = max(CANVAS_SIZE, text_height + MARGIN * 2)
+    image = Image.new("L", (image_width, image_height), 0)
+    draw = ImageDraw.Draw(image)
+    x = (image_width - text_width) / 2 - bbox[0]
+    y = (image_height - text_height) / 2 - bbox[1]
+    draw.text((x, y), text, fill=255, font=font)
+    return np.array(image)
+
+
+def contours_to_lines(contours, image_shape, char_spacing, y_offset, scale_multiplier):
+    height, width = image_shape
+    center = np.array([width / 2, height / 2], dtype=float)
+    scale = 1.8 * scale_multiplier / max(width, height)
+    lines = []
+
+    for contour in contours:
+        epsilon = max(1.0, 0.008 * cv2.arcLength(contour, closed=True))
+        simplified = cv2.approxPolyDP(contour, epsilon, closed=True)
+        points = simplified[:, 0, :].astype(float)
+        if len(points) < 2:
             continue
 
-        if font_path and Path(font_path).exists():
-            return FontProperties(fname=font_path)
+        normalized = points - center
+        normalized[:, 1] *= -1
+        normalized *= scale
+        normalized[:, 1] += y_offset
 
-    return FontProperties()
+        for start, end in zip(normalized, np.roll(normalized, -1, axis=0)):
+            if np.linalg.norm(end - start) < 1e-5:
+                continue
+            lines.append([start.tolist(), end.tolist()])
+
+    if char_spacing != 0.15:
+        spacing_adjustment = char_spacing - 0.15
+        for line in lines:
+            for point in line:
+                point[0] *= 1 + spacing_adjustment
+
+    return lines
 
 
 def text2lines(text, char_spacing=0.15, y_offset=0.0, scale_multiplier=1.0):
-    font = find_chinese_font()
-    char_data = []
-
-    for char in text:
-        path = TextPath((0, 0), char, size=1.0, prop=font)
-        vertices = path.vertices
-        if len(vertices) == 0:
-            continue
-
-        min_x = np.min(vertices[:, 0])
-        max_x = np.max(vertices[:, 0])
-        min_y = np.min(vertices[:, 1])
-        max_y = np.max(vertices[:, 1])
-        char_data.append((path, (min_x, max_x, min_y, max_y)))
-
-    if not char_data:
+    if not text:
         return []
 
-    total_width = sum(max_x - min_x for _, (min_x, max_x, _, _) in char_data)
-    total_spacing = char_spacing * (len(char_data) - 1)
-    total_needed = total_width + total_spacing
-    base_scale = 1.8 / total_needed if total_needed > 1.8 else 1.0
-    scale = base_scale * scale_multiplier
-    cursor_x = -0.9 * scale_multiplier
-    lines = []
+    mask = render_text_mask(text)
+    _, binary = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+    contours, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return []
 
-    for path, (min_x, max_x, min_y, max_y) in char_data:
-        offset_x = cursor_x - min_x * scale
-        offset_y = y_offset - (min_y + (max_y - min_y) / 2) * scale
-
-        for polygon in path.to_polygons():
-            if len(polygon) < 2:
-                continue
-
-            transformed = polygon * scale + np.array([offset_x, offset_y])
-            for start, end in zip(transformed[:-1], transformed[1:]):
-                lines.append([start.tolist(), end.tolist()])
-
-        cursor_x += (max_x - min_x) * scale + char_spacing
-
-    return lines
+    return contours_to_lines(
+        contours,
+        binary.shape,
+        char_spacing=char_spacing,
+        y_offset=y_offset,
+        scale_multiplier=scale_multiplier,
+    )

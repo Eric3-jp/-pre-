@@ -1,10 +1,8 @@
 import sys
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 from char2lines import text2lines
-from plotter import plotlinecurves, plotlines
 from poincare import hyperbolic_line
 
 
@@ -36,6 +34,10 @@ def text_to_poincare(text, scale_multiplier=1.0, char_spacing=0.15, y_offset=0.0
 
 
 def main():
+    import matplotlib.pyplot as plt
+
+    from plotter import plotlinecurves, plotlines
+
     if len(sys.argv) < 2:
         print("Usage: python poincare_lines.py <text> [scale]")
         print("Example: python poincare_lines.py 你好")
