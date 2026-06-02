@@ -1,5 +1,3 @@
-from pathlib import Path
-from tempfile import TemporaryDirectory
 import io
 
 import matplotlib.pyplot as plt
@@ -64,7 +62,7 @@ def create_tessellation_figure(polygons, fill_color: bool, border_size: float):
 
 def render_tessellation_mode():
     st.header("基础镶嵌生成")
-    st.write("生成不同的双曲镶嵌图案，并调整参数查看实时效果。")
+    st.write("选择一种预设镶嵌图案，快速查看 Poincaré 圆盘中的双曲镶嵌效果。")
 
     controls, preview = st.columns([1, 3])
 
@@ -76,64 +74,23 @@ def render_tessellation_mode():
             format_func=lambda key: f"{key} (p={CONFIGS[key]['p']}, q={CONFIGS[key]['q']})",
             help="选择预置的双曲镶嵌类型。",
         )
-        cfg = CONFIGS[config_key]
-        p = st.slider("p（多边形边数）", 3, 10, cfg["p"])
-        q = st.slider("q（顶点处多边形数）", 3, 10, cfg["q"])
-        depth = st.slider("递归深度", 1, 8, min(cfg["k"], 8), help="越大越复杂，计算也越慢。")
-        ring_inrad = st.slider("外环内半径", 0.5, 1.0, cfg["ring_inrad"], 0.01)
-        phi = st.slider("旋转角度（弧度）", 0.0, float(2 * np.pi), 0.0, 0.1)
-        border_size = st.slider("边框大小", 0.005, 0.05, 0.02, 0.005)
         fill_color = st.checkbox("填充颜色", False)
-        generate_stl = st.checkbox("生成 STL 模型", False, help="需要安装 trimesh。")
 
     with preview:
         st.subheader("预览")
         try:
+            cfg = CONFIGS[config_key]
             with st.spinner("生成中..."):
-                polygons = get_tessellation(p, q, phi, depth)
-                fig = create_tessellation_figure(polygons, fill_color, border_size)
+                polygons = get_tessellation(cfg["p"], cfg["q"], 0.0, min(cfg["k"], 8))
+                fig = create_tessellation_figure(polygons, fill_color, 0.02)
                 st.pyplot(fig)
                 plt.close(fig)
 
-            col_a, col_b, col_c = st.columns(3)
+            col_a, col_b = st.columns(2)
             col_a.metric("多边形数量", len(polygons))
-            col_b.metric("递归深度", depth)
-            col_c.metric("配置", f"({p}, {q})")
-
-            if generate_stl:
-                render_stl_download(polygons, config_key, ring_inrad, border_size)
+            col_b.metric("配置", f"({cfg['p']}, {cfg['q']})")
         except Exception as exc:
             st.error(f"生成失败：{exc}")
-
-
-def render_stl_download(polygons, config_key: str, ring_inrad: float, border_size: float):
-    try:
-        import stlgen
-
-        with TemporaryDirectory() as tmp_dir:
-            stl_name = f"poincare_{config_key}_custom.stl"
-            stl_path = Path(tmp_dir) / stl_name
-            with st.spinner("生成 STL 文件中..."):
-                stlgen.generate_stl(
-                    polygons,
-                    str(stl_path),
-                    border_size=border_size,
-                    ring_inrad=ring_inrad,
-                )
-
-            if not stl_path.exists():
-                st.warning("STL 文件未生成，请降低递归深度或调整参数后重试。")
-                return
-
-            st.download_button(
-                label="下载 STL 模型",
-                data=stl_path.read_bytes(),
-                file_name=stl_name,
-                mime="application/octet-stream",
-            )
-    except Exception as exc:
-        st.warning(f"STL 生成失败：{exc}")
-
 
 def render_text_mode():
     st.header("文字投影到双曲空间")
@@ -296,7 +253,7 @@ def render_footer():
     st.markdown(
         """
 ### 关于项目
-这个工具基于 **Poincaré 圆盘模型** 的双曲几何，可生成双曲镶嵌图案、STL 模型和文字/图片鱼眼投影效果。
+这个工具基于 **Poincaré 圆盘模型** 的双曲几何，可生成双曲镶嵌图案和文字/图片鱼眼投影效果。
 
 ### 资源
 - [Poincaré 圆盘模型](https://en.wikipedia.org/wiki/Poincar%C3%A9_disk_model)
@@ -308,7 +265,7 @@ def render_footer():
 
 def main():
     st.title("🌀 Poincaré 双曲镶嵌生成器")
-    st.markdown("使用双曲几何创建镶嵌图案、文字艺术、图片鱼眼投影和 3D 打印模型。")
+    st.markdown("使用双曲几何创建镶嵌图案、文字艺术和图片鱼眼投影。")
 
     st.sidebar.header("选择功能")
     mode = st.sidebar.radio("功能选择", MODES)
