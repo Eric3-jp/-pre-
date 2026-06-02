@@ -1,5 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import io
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -180,6 +181,64 @@ def render_text_mode():
             st.error(f"处理失败：{exc}")
 
 
+def resize_image_for_display(image_array, max_size=1200):
+    height, width = image_array.shape[:2]
+    scale = min(1.0, max_size / max(height, width))
+    if scale >= 1.0:
+        return image_array
+
+    import cv2
+
+    new_size = (int(width * scale), int(height * scale))
+    return cv2.resize(image_array, new_size, interpolation=cv2.INTER_AREA)
+
+
+def apply_fisheye_to_image(image_array, strength=1.6, zoom=1.0, circular_mask=True, background=(0, 0, 0)):
+    import cv2
+
+    source = resize_image_for_display(image_array)
+    height, width = source.shape[:2]
+    cx = (width - 1) / 2
+    cy = (height - 1) / 2
+    radius = min(cx, cy) * max(zoom, 1e-6)
+
+    y, x = np.indices((height, width), dtype=np.float32)
+    dx = x - cx
+    dy = y - cy
+    r_out = np.sqrt(dx * dx + dy * dy)
+    theta = np.arctan2(dy, dx)
+    normalized_out = r_out / radius
+
+    if strength <= 1e-6:
+        normalized_in = normalized_out
+    else:
+        normalized_in = np.arctanh(np.clip(normalized_out, 0, 0.999999) * np.tanh(strength)) / strength
+
+    r_in = normalized_in * radius
+    map_x = cx + r_in * np.cos(theta)
+    map_y = cy + r_in * np.sin(theta)
+
+    valid = normalized_out <= 1.0
+    map_x = np.where(valid, map_x, -1).astype(np.float32)
+    map_y = np.where(valid, map_y, -1).astype(np.float32)
+    warped = cv2.remap(source, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=background)
+
+    if circular_mask:
+        result = np.zeros_like(warped)
+        result[:, :] = np.array(background, dtype=np.uint8)
+        result[valid] = warped[valid]
+        return result
+
+    return warped
+
+
+def image_to_png_bytes(image_array):
+    image = Image.fromarray(image_array.astype(np.uint8))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
 def resize_image_for_processing(image_array, max_size=900):
     height, width = image_array.shape[:2]
     scale = min(1.0, max_size / max(height, width))
@@ -240,27 +299,32 @@ def create_edges_figure(edges):
 
 
 def render_image_mode():
-    st.header("图片鱼眼投影")
-    st.write("上传图片，提取主要轮廓线条，并生成类似鱼眼镜头的径向变形效果。")
+    st.header("图片鱼眼镜头")
+    st.write("直接对整张图片做像素级鱼眼畸变，保留颜色、纹理和明暗，更接近真实鱼眼相机效果。")
 
     controls, preview = st.columns([1, 3])
 
     with controls:
         st.subheader("图片设置")
         uploaded_file = st.file_uploader("上传图片", type=["jpg", "jpeg", "png", "bmp"])
-        threshold = st.slider("边缘检测阈值", 20, 220, 80, 5)
         fisheye_strength = st.slider(
             "鱼眼强度",
             0.0,
             4.0,
             1.6,
             0.1,
-            help="0 表示不变形；数值越大，越接近鱼眼镜头的径向畸变。",
+            help="0 表示不变形；数值越大，中心膨胀和边缘压缩越明显。",
         )
-        output_scale = st.slider("画面缩放", 0.3, 1.0, 0.9, 0.05)
-        min_contour_length = st.slider("最小轮廓长度", 5, 200, 35, 5, help="过滤细碎噪声。值越大，保留的线条越少。")
-        simplify = st.slider("线条简化", 0.5, 8.0, 2.0, 0.5, help="值越大线条越简洁，值越小细节越多。")
-        show_edges = st.checkbox("同时显示边缘检测图", True)
+        zoom = st.slider("镜头缩放", 0.5, 1.5, 1.0, 0.05, help="控制圆形镜头覆盖范围。")
+        circular_mask = st.checkbox("圆形镜头遮罩", True)
+        show_lineart = st.checkbox("同时生成线稿鱼眼", False)
+
+        if show_lineart:
+            st.subheader("线稿参数")
+            threshold = st.slider("边缘检测阈值", 20, 220, 80, 5)
+            output_scale = st.slider("线稿缩放", 0.3, 1.0, 0.9, 0.05)
+            min_contour_length = st.slider("最小轮廓长度", 5, 200, 35, 5)
+            simplify = st.slider("线条简化", 0.5, 8.0, 2.0, 0.5)
 
     with preview:
         st.subheader("处理结果")
@@ -273,30 +337,45 @@ def render_image_mode():
             image_array = np.array(image)
             st.image(image, caption="原始图片", use_container_width=True)
 
-            with st.spinner("正在提取轮廓并生成鱼眼投影..."):
-                edges, fisheye_lines = image_to_fisheye_polylines(
+            with st.spinner("正在生成真实鱼眼图片..."):
+                fisheye_image = apply_fisheye_to_image(
                     image_array,
-                    threshold=threshold,
-                    fisheye_strength=fisheye_strength,
-                    output_scale=output_scale,
-                    min_contour_length=min_contour_length,
-                    simplify=simplify,
+                    strength=fisheye_strength,
+                    zoom=zoom,
+                    circular_mask=circular_mask,
                 )
 
-                if show_edges:
+            st.image(fisheye_image, caption="真实鱼眼图片", use_container_width=True)
+            st.download_button(
+                "下载鱼眼 PNG",
+                data=image_to_png_bytes(fisheye_image),
+                file_name="fisheye_image.png",
+                mime="image/png",
+            )
+
+            if show_lineart:
+                with st.spinner("正在生成线稿鱼眼..."):
+                    edges, fisheye_lines = image_to_fisheye_polylines(
+                        image_array,
+                        threshold=threshold,
+                        fisheye_strength=fisheye_strength,
+                        output_scale=output_scale,
+                        min_contour_length=min_contour_length,
+                        simplify=simplify,
+                    )
+
                     edge_fig = create_edges_figure(edges)
                     st.pyplot(edge_fig)
                     plt.close(edge_fig)
 
-                fig, ax = plt.subplots(figsize=(8, 8), dpi=120)
-                plot_fisheye_lines(fisheye_lines, ax=ax, title="图片鱼眼投影结果")
-                st.pyplot(fig)
-                plt.close(fig)
+                    fig, ax = plt.subplots(figsize=(8, 8), dpi=120)
+                    plot_fisheye_lines(fisheye_lines, ax=ax, title="线稿鱼眼投影")
+                    st.pyplot(fig)
+                    plt.close(fig)
 
-            st.success(f"鱼眼投影完成，共保留 {len(fisheye_lines)} 条轮廓线。")
+                st.info(f"线稿鱼眼共保留 {len(fisheye_lines)} 条轮廓线。")
         except Exception as exc:
             st.error(f"处理失败：{exc}")
-
 
 def render_footer():
     st.markdown("---")
