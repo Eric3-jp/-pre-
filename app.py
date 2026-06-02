@@ -173,7 +173,7 @@ def render_text_mode():
                 )
                 fig, ax = plt.subplots(figsize=(8, 8), dpi=120)
                 ax.set_aspect("equal")
-                plot_fisheye_lines(fisheye_lines, ax=ax, title=f"'{text_input}' 的鱼眼投影")
+                plot_fisheye_lines(fisheye_lines, ax=ax, title="文字鱼眼投影")
                 st.pyplot(fig)
                 plt.close(fig)
             st.success("鱼眼投影完成。")
