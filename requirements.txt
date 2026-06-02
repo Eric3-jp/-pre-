@@ -1,7 +1,7 @@
 streamlit
 matplotlib
 numpy
-Pillow==10.1.0
-opencv-python==4.8.1.78
-trimesh==4.0.0
-scikit-image==0.22.0
+Pillow
+opencv-python
+trimesh
+scikit-image
