@@ -257,11 +257,6 @@ def render_image_mode():
             help="0 表示不变形；数值越大，中心膨胀和边缘压缩越明显。",
         )
         zoom = st.slider("镜头缩放", 0.5, 1.5, 1.0, 0.05, help="控制鱼眼镜头覆盖范围。")
-        crop_to_circle = st.checkbox(
-            "裁成圆形镜头",
-            True,
-            help="开启后只保留圆形鱼眼视野，圆外填黑；关闭后显示完整矩形画布。",
-        )
         show_original = st.checkbox("显示原始图片", False)
 
     with preview:
@@ -282,7 +277,7 @@ def render_image_mode():
                     image_array,
                     strength=fisheye_strength,
                     zoom=zoom,
-                    circular_mask=crop_to_circle,
+                    circular_mask=True,
                 )
 
             st.image(fisheye_image, caption="真实鱼眼图片", use_container_width=True)
