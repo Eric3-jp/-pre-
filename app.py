@@ -10,7 +10,7 @@ from PIL import Image
 
 from plotter import plot_fisheye_lines, set_title
 from poincare import CONFIGS, hyperbolic_tessellation
-from poincare_lines import text_to_fisheye
+from poincare_lines import fisheye_point, text_to_fisheye
 
 APP_TITLE = "Poincaré 双曲镶嵌生成器"
 MODES = ["基础镶嵌生成", "文字投影", "图片处理"]
@@ -136,7 +136,7 @@ def render_stl_download(polygons, config_key: str, ring_inrad: float, border_siz
 
 def render_text_mode():
     st.header("文字投影到双曲空间")
-    st.write("将文字轮廓投影到 Poincaré 圆盘，创建双曲文字艺术。")
+    st.write("将文字轮廓投影到 Poincaré 圆盘，创建鱼眼文字艺术。")
 
     controls, preview = st.columns([1, 3])
 
@@ -180,16 +180,87 @@ def render_text_mode():
             st.error(f"处理失败：{exc}")
 
 
+def resize_image_for_processing(image_array, max_size=900):
+    height, width = image_array.shape[:2]
+    scale = min(1.0, max_size / max(height, width))
+    if scale >= 1.0:
+        return image_array
+
+    import cv2
+
+    new_size = (int(width * scale), int(height * scale))
+    return cv2.resize(image_array, new_size, interpolation=cv2.INTER_AREA)
+
+
+def image_to_fisheye_polylines(
+    image_array,
+    threshold=80,
+    fisheye_strength=1.6,
+    output_scale=0.9,
+    min_contour_length=35,
+    simplify=2.0,
+):
+    import cv2
+
+    image_array = resize_image_for_processing(image_array)
+    gray = cv2.cvtColor(image_array[..., :3], cv2.COLOR_RGB2GRAY) if image_array.ndim == 3 else image_array.astype(np.uint8)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blurred, threshold, threshold * 2)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    height, width = gray.shape[:2]
+    center = np.array([width / 2, height / 2], dtype=float)
+    base_scale = output_scale * 2 / max(width, height)
+    polylines = []
+
+    for contour in contours:
+        arc_length = cv2.arcLength(contour, closed=False)
+        if arc_length < min_contour_length:
+            continue
+
+        simplified = cv2.approxPolyDP(contour, max(0.5, simplify), closed=False)
+        points = simplified[:, 0, :].astype(float)
+        if len(points) < 2:
+            continue
+
+        normalized = points - center
+        normalized[:, 1] *= -1
+        normalized *= base_scale
+        polylines.append([fisheye_point(point, strength=fisheye_strength) for point in normalized])
+
+    return edges, polylines
+
+
+def create_edges_figure(edges):
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=120)
+    ax.imshow(edges, cmap="gray")
+    set_title(ax, "边缘检测结果")
+    ax.axis("off")
+    return fig
+
+
 def render_image_mode():
-    st.header("图片线条提取")
-    st.write("上传图片并提取边缘线条。双曲投影部分仍需后续接入线段追踪算法。")
+    st.header("图片鱼眼投影")
+    st.write("上传图片，提取主要轮廓线条，并生成类似鱼眼镜头的径向变形效果。")
 
     controls, preview = st.columns([1, 3])
 
     with controls:
         st.subheader("图片设置")
         uploaded_file = st.file_uploader("上传图片", type=["jpg", "jpeg", "png", "bmp"])
-        threshold = st.slider("边界检测阈值", 50, 200, 100, 10)
+        threshold = st.slider("边缘检测阈值", 20, 220, 80, 5)
+        fisheye_strength = st.slider(
+            "鱼眼强度",
+            0.0,
+            4.0,
+            1.6,
+            0.1,
+            help="0 表示不变形；数值越大，越接近鱼眼镜头的径向畸变。",
+        )
+        output_scale = st.slider("画面缩放", 0.3, 1.0, 0.9, 0.05)
+        min_contour_length = st.slider("最小轮廓长度", 5, 200, 35, 5, help="过滤细碎噪声。值越大，保留的线条越少。")
+        simplify = st.slider("线条简化", 0.5, 8.0, 2.0, 0.5, help="值越大线条越简洁，值越小细节越多。")
+        show_edges = st.checkbox("同时显示边缘检测图", True)
 
     with preview:
         st.subheader("处理结果")
@@ -198,27 +269,31 @@ def render_image_mode():
             return
 
         try:
-            import cv2
-
-            image = Image.open(uploaded_file)
+            image = Image.open(uploaded_file).convert("RGB")
             image_array = np.array(image)
             st.image(image, caption="原始图片", use_container_width=True)
 
-            if image_array.ndim == 3:
-                gray = np.dot(image_array[..., :3], [0.2989, 0.5870, 0.1140])
-            else:
-                gray = image_array
+            with st.spinner("正在提取轮廓并生成鱼眼投影..."):
+                edges, fisheye_lines = image_to_fisheye_polylines(
+                    image_array,
+                    threshold=threshold,
+                    fisheye_strength=fisheye_strength,
+                    output_scale=output_scale,
+                    min_contour_length=min_contour_length,
+                    simplify=simplify,
+                )
 
-            with st.spinner("处理中..."):
-                edges = cv2.Canny(gray.astype(np.uint8), threshold, threshold * 2)
-                fig, ax = plt.subplots(figsize=(8, 6), dpi=120)
-                ax.imshow(edges, cmap="gray")
-                set_title(ax, "边界检测结果")
-                ax.axis("off")
+                if show_edges:
+                    edge_fig = create_edges_figure(edges)
+                    st.pyplot(edge_fig)
+                    plt.close(edge_fig)
+
+                fig, ax = plt.subplots(figsize=(8, 8), dpi=120)
+                plot_fisheye_lines(fisheye_lines, ax=ax, title="图片鱼眼投影结果")
                 st.pyplot(fig)
                 plt.close(fig)
 
-            st.info("当前已完成边缘检测；如需真正投影图片线条，需要增加轮廓线段化模块。")
+            st.success(f"鱼眼投影完成，共保留 {len(fisheye_lines)} 条轮廓线。")
         except Exception as exc:
             st.error(f"处理失败：{exc}")
 
@@ -228,7 +303,7 @@ def render_footer():
     st.markdown(
         """
 ### 关于项目
-这个工具基于 **Poincaré 圆盘模型** 的双曲几何，可生成双曲镶嵌图案、STL 模型和文字投影效果。
+这个工具基于 **Poincaré 圆盘模型** 的双曲几何，可生成双曲镶嵌图案、STL 模型和文字/图片鱼眼投影效果。
 
 ### 资源
 - [Poincaré 圆盘模型](https://en.wikipedia.org/wiki/Poincar%C3%A9_disk_model)
@@ -240,7 +315,7 @@ def render_footer():
 
 def main():
     st.title("🌀 Poincaré 双曲镶嵌生成器")
-    st.markdown("使用双曲几何创建镶嵌图案、文字艺术和 3D 打印模型。")
+    st.markdown("使用双曲几何创建镶嵌图案、文字艺术、图片鱼眼投影和 3D 打印模型。")
 
     st.sidebar.header("选择功能")
     mode = st.sidebar.radio("功能选择", MODES)
