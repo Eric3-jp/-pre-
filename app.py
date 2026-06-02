@@ -9,9 +9,9 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle, Polygon
 from PIL import Image
 
-from plotter import plot_fisheye_lines, set_title
+from plotter import plot_fisheye_lines
 from poincare import CONFIGS, hyperbolic_tessellation
-from poincare_lines import fisheye_point, text_to_fisheye
+from poincare_lines import text_to_fisheye
 
 APP_TITLE = "Poincaré 双曲镶嵌生成器"
 MODES = ["基础镶嵌生成", "文字投影", "图片处理"]
@@ -239,65 +239,6 @@ def image_to_png_bytes(image_array):
     return buffer.getvalue()
 
 
-def resize_image_for_processing(image_array, max_size=900):
-    height, width = image_array.shape[:2]
-    scale = min(1.0, max_size / max(height, width))
-    if scale >= 1.0:
-        return image_array
-
-    import cv2
-
-    new_size = (int(width * scale), int(height * scale))
-    return cv2.resize(image_array, new_size, interpolation=cv2.INTER_AREA)
-
-
-def image_to_fisheye_polylines(
-    image_array,
-    threshold=80,
-    fisheye_strength=1.6,
-    output_scale=0.9,
-    min_contour_length=35,
-    simplify=2.0,
-):
-    import cv2
-
-    image_array = resize_image_for_processing(image_array)
-    gray = cv2.cvtColor(image_array[..., :3], cv2.COLOR_RGB2GRAY) if image_array.ndim == 3 else image_array.astype(np.uint8)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    edges = cv2.Canny(blurred, threshold, threshold * 2)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
-    height, width = gray.shape[:2]
-    center = np.array([width / 2, height / 2], dtype=float)
-    base_scale = output_scale * 2 / max(width, height)
-    polylines = []
-
-    for contour in contours:
-        arc_length = cv2.arcLength(contour, closed=False)
-        if arc_length < min_contour_length:
-            continue
-
-        simplified = cv2.approxPolyDP(contour, max(0.5, simplify), closed=False)
-        points = simplified[:, 0, :].astype(float)
-        if len(points) < 2:
-            continue
-
-        normalized = points - center
-        normalized[:, 1] *= -1
-        normalized *= base_scale
-        polylines.append([fisheye_point(point, strength=fisheye_strength) for point in normalized])
-
-    return edges, polylines
-
-
-def create_edges_figure(edges):
-    fig, ax = plt.subplots(figsize=(8, 6), dpi=120)
-    ax.imshow(edges, cmap="gray")
-    set_title(ax, "边缘检测结果")
-    ax.axis("off")
-    return fig
-
-
 def render_image_mode():
     st.header("图片鱼眼镜头")
     st.write("直接对整张图片做像素级鱼眼畸变，保留颜色、纹理和明暗，更接近真实鱼眼相机效果。")
@@ -315,16 +256,13 @@ def render_image_mode():
             0.1,
             help="0 表示不变形；数值越大，中心膨胀和边缘压缩越明显。",
         )
-        zoom = st.slider("镜头缩放", 0.5, 1.5, 1.0, 0.05, help="控制圆形镜头覆盖范围。")
-        circular_mask = st.checkbox("圆形镜头遮罩", True)
-        show_lineart = st.checkbox("同时生成线稿鱼眼", False)
-
-        if show_lineart:
-            st.subheader("线稿参数")
-            threshold = st.slider("边缘检测阈值", 20, 220, 80, 5)
-            output_scale = st.slider("线稿缩放", 0.3, 1.0, 0.9, 0.05)
-            min_contour_length = st.slider("最小轮廓长度", 5, 200, 35, 5)
-            simplify = st.slider("线条简化", 0.5, 8.0, 2.0, 0.5)
+        zoom = st.slider("镜头缩放", 0.5, 1.5, 1.0, 0.05, help="控制鱼眼镜头覆盖范围。")
+        crop_to_circle = st.checkbox(
+            "裁成圆形镜头",
+            True,
+            help="开启后只保留圆形鱼眼视野，圆外填黑；关闭后显示完整矩形画布。",
+        )
+        show_original = st.checkbox("显示原始图片", False)
 
     with preview:
         st.subheader("处理结果")
@@ -335,14 +273,16 @@ def render_image_mode():
         try:
             image = Image.open(uploaded_file).convert("RGB")
             image_array = np.array(image)
-            st.image(image, caption="原始图片", use_container_width=True)
+
+            if show_original:
+                st.image(image, caption="原始图片", use_container_width=True)
 
             with st.spinner("正在生成真实鱼眼图片..."):
                 fisheye_image = apply_fisheye_to_image(
                     image_array,
                     strength=fisheye_strength,
                     zoom=zoom,
-                    circular_mask=circular_mask,
+                    circular_mask=crop_to_circle,
                 )
 
             st.image(fisheye_image, caption="真实鱼眼图片", use_container_width=True)
@@ -352,28 +292,6 @@ def render_image_mode():
                 file_name="fisheye_image.png",
                 mime="image/png",
             )
-
-            if show_lineart:
-                with st.spinner("正在生成线稿鱼眼..."):
-                    edges, fisheye_lines = image_to_fisheye_polylines(
-                        image_array,
-                        threshold=threshold,
-                        fisheye_strength=fisheye_strength,
-                        output_scale=output_scale,
-                        min_contour_length=min_contour_length,
-                        simplify=simplify,
-                    )
-
-                    edge_fig = create_edges_figure(edges)
-                    st.pyplot(edge_fig)
-                    plt.close(edge_fig)
-
-                    fig, ax = plt.subplots(figsize=(8, 8), dpi=120)
-                    plot_fisheye_lines(fisheye_lines, ax=ax, title="线稿鱼眼投影")
-                    st.pyplot(fig)
-                    plt.close(fig)
-
-                st.info(f"线稿鱼眼共保留 {len(fisheye_lines)} 条轮廓线。")
         except Exception as exc:
             st.error(f"处理失败：{exc}")
 
