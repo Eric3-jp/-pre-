@@ -193,7 +193,7 @@ def resize_image_for_display(image_array, max_size=1200):
     return cv2.resize(image_array, new_size, interpolation=cv2.INTER_AREA)
 
 
-def apply_fisheye_to_image(image_array, strength=1.6, zoom=1.0, circular_mask=True, background=(0, 0, 0)):
+def apply_fisheye_to_image(image_array, strength=1.6, zoom=1.0):
     import cv2
 
     source = resize_image_for_display(image_array)
@@ -221,16 +221,18 @@ def apply_fisheye_to_image(image_array, strength=1.6, zoom=1.0, circular_mask=Tr
     valid = normalized_out <= 1.0
     map_x = np.where(valid, map_x, -1).astype(np.float32)
     map_y = np.where(valid, map_y, -1).astype(np.float32)
-    warped = cv2.remap(source, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=background)
+    warped = cv2.remap(source, map_x, map_y, interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
 
-    if circular_mask:
-        result = np.zeros_like(warped)
-        result[:, :] = np.array(background, dtype=np.uint8)
-        result[valid] = warped[valid]
-        return result
+    alpha = np.zeros((height, width), dtype=np.uint8)
+    alpha[valid] = 255
+    rgba = np.dstack([warped, alpha])
 
-    return warped
-
+    crop_radius = int(min(cx, cy))
+    left = int(round(cx - crop_radius))
+    right = int(round(cx + crop_radius + 1))
+    top = int(round(cy - crop_radius))
+    bottom = int(round(cy + crop_radius + 1))
+    return rgba[top:bottom, left:right]
 
 def image_to_png_bytes(image_array):
     image = Image.fromarray(image_array.astype(np.uint8))
@@ -277,7 +279,6 @@ def render_image_mode():
                     image_array,
                     strength=fisheye_strength,
                     zoom=zoom,
-                    circular_mask=True,
                 )
 
             st.image(fisheye_image, caption="真实鱼眼图片", use_container_width=True)
