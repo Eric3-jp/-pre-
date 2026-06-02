@@ -1,0 +1,5 @@
+fonts-noto-cjk
+libgl1
+libsm6
+libxrender1
+libxext6

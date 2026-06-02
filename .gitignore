@@ -1,0 +1,70 @@
+# 虚拟环境
+venv/
+env/
+ENV/
+
+# Python 编译文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 发行版
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# 单元测试
+.pytest_cache/
+.coverage
+.tox/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# Streamlit 配置
+.streamlit/secrets.toml
+
+# 本地生成的文件
+*.stl
+*.png
+*.jpg
+*.jpeg
+
+# 临时文件
+*.tmp
+*.temp
+temp/
+
+# 环境变量
+.env
+.env.local
+
+# 日志文件
+*.log
+logs/
+
+# 依赖
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 其他
+*.bak
+*.orig
