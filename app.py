@@ -8,7 +8,7 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle, Polygon
 from PIL import Image
 
-from plotter import plotlinecurves
+from plotter import plotlinecurves, set_title
 from poincare import CONFIGS, hyperbolic_tessellation
 from poincare_lines import text_to_poincare
 
@@ -204,7 +204,7 @@ def render_image_mode():
                 edges = cv2.Canny(gray.astype(np.uint8), threshold, threshold * 2)
                 fig, ax = plt.subplots(figsize=(8, 6), dpi=120)
                 ax.imshow(edges, cmap="gray")
-                ax.set_title("边界检测结果")
+                set_title(ax, "边界检测结果")
                 ax.axis("off")
                 st.pyplot(fig)
                 plt.close(fig)
