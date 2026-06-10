@@ -104,7 +104,7 @@ def render_text_mode():
 
     with controls:
         st.subheader("文字设置")
-        text_input = st.text_input("输入文字", "你好", max_chars=20)
+        text_input = st.text_input("输入文字", "投第十组一票", max_chars=20)
         scale_multiplier = st.slider("文字缩放", 0.5, 3.0, 1.0, 0.1)
         y_offset = st.slider("垂直偏移", -1.0, 1.0, 0.0, 0.1)
         char_spacing = st.slider("字符间距", 0.05, 0.3, 0.15, 0.01)
