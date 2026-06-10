@@ -4,11 +4,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import streamlit as st
 from matplotlib.collections import PatchCollection
-from matplotlib.patches import Circle, Polygon
+from matplotlib.path import Path
+from matplotlib.patches import Circle, PathPatch
 from PIL import Image
 
 from plotter import plot_fisheye_lines
-from poincare import CONFIGS, hyperbolic_tessellation
+from poincare import CONFIGS, hyperbolic_line, hyperbolic_tessellation
 from poincare_lines import text_to_fisheye
 
 APP_TITLE = "Poincaré 双曲镶嵌生成器"
@@ -28,6 +29,39 @@ def get_tessellation(p: int, q: int, phi: float, depth: int):
     return hyperbolic_tessellation(p, q, phi, depth)
 
 
+def sample_hyperbolic_edge(start, end, samples=12):
+    edge = hyperbolic_line(start, end)
+    if edge["type"] == "line":
+        return np.linspace(start, end, samples)
+
+    center = edge["center"]
+    radius = edge["radius"]
+    angle_start, angle_end = edge["angles"]
+    theta = np.linspace(angle_start, angle_end, samples)
+    points = np.column_stack([
+        center[0] + radius * np.cos(theta),
+        center[1] + radius * np.sin(theta),
+    ])
+
+    if np.linalg.norm(points[0] - np.asarray(start)) > np.linalg.norm(points[-1] - np.asarray(start)):
+        points = points[::-1]
+    return points
+
+
+def curved_polygon_path(poly, edge_samples=12):
+    sampled_edges = []
+    for index, start in enumerate(poly):
+        end = poly[(index + 1) % len(poly)]
+        edge_points = sample_hyperbolic_edge(start, end, edge_samples)
+        sampled_edges.append(edge_points if index == 0 else edge_points[1:])
+
+    vertices = np.vstack(sampled_edges)
+    codes = [Path.MOVETO] + [Path.LINETO] * (len(vertices) - 1)
+    vertices = np.vstack([vertices, vertices[0]])
+    codes.append(Path.CLOSEPOLY)
+    return Path(vertices, codes)
+
+
 def create_tessellation_figure(polygons, fill_color: bool, border_size: float):
     fig, ax = plt.subplots(figsize=(8, 8), dpi=120)
     ax.set_aspect("equal")
@@ -45,9 +79,8 @@ def create_tessellation_figure(polygons, fill_color: bool, border_size: float):
 
         face_color = cmap(np.linalg.norm(centroid)) if fill_color else "none"
         patches.append(
-            Polygon(
-                poly,
-                closed=True,
+            PathPatch(
+                curved_polygon_path(poly),
                 facecolor=face_color,
                 edgecolor="black",
                 linewidth=linewidth,
