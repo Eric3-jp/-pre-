@@ -25,7 +25,7 @@ CONFIGS = {
     'tri': {
         'p': 3,
         'q': 7,
-        'k': 9,
+        'k': 12,
         'ring_inrad': 0.96
     },
     'square': {
@@ -209,15 +209,16 @@ def polygon_union(polygons, tol=1e-7):
     return unique
 
 
-def polygon_is_expandable(poly, expand_radius=0.995):
+def polygon_is_expandable(poly, expand_radius=0.9999):
+    """A polygon is expandable as long as at least one vertex is inside the unit disk."""
     vertices = np.asarray(poly, dtype=float)
     if not np.all(np.isfinite(vertices)):
         return False
-    centroid = np.mean(vertices, axis=0)
-    return np.linalg.norm(centroid) < expand_radius
+    vertex_norms = np.linalg.norm(vertices, axis=1)
+    return np.any(vertex_norms < expand_radius)
 
 
-def hyperbolic_tessellation(p, q, phi=0.0, k=3, tol=1e-7, expand_radius=0.995):
+def hyperbolic_tessellation(p, q, phi=0.0, k=3, tol=1e-7, expand_radius=0.9999):
     """
     Generate hyperbolic tessellation {p, q} up to recursion depth k.
     Uses frontier expansion so old polygons are not repeatedly expanded.

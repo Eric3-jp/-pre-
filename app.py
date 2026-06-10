@@ -29,65 +29,36 @@ def get_tessellation(p: int, q: int, phi: float, depth: int):
     return hyperbolic_tessellation(p, q, phi, depth)
 
 
-def _arc_points(center, radius, angle_start, angle_end, samples):
-    theta = np.linspace(angle_start, angle_end, samples)
-    return np.column_stack([
-        center[0] + radius * np.cos(theta),
-        center[1] + radius * np.sin(theta),
-    ])
-
-def add_spherical_bulge(points, strength=0.045):
-    points = np.asarray(points, dtype=float)
-    midpoint = points[len(points) // 2]
-    direction = midpoint.copy()
-    direction_norm = np.linalg.norm(direction)
-    if direction_norm < 1e-8:
-        chord = points[-1] - points[0]
-        direction = np.array([-chord[1], chord[0]], dtype=float)
-        direction_norm = np.linalg.norm(direction)
-    if direction_norm < 1e-8:
-        return points
-
-    direction = direction / direction_norm
-    weights = np.sin(np.linspace(0, np.pi, len(points)))[:, None]
-    radii = np.linalg.norm(points, axis=1)
-    available_space = max(0.0, 0.995 - float(radii.max()))
-    bulge = min(strength, available_space * 0.85)
-    bulged = points + weights * direction * bulge
-
-    bulged_radii = np.linalg.norm(bulged, axis=1)
-    outside = bulged_radii > 0.995
-    if np.any(outside):
-        bulged[outside] *= (0.995 / bulged_radii[outside])[:, None]
-    return bulged
-
-
-
-def sample_hyperbolic_edge(start, end, samples=28, visual_bulge=0.045):
+def sample_hyperbolic_edge(start, end, samples=20):
+    """Sample the Poincare geodesic (orthogonal arc) between two points."""
     edge = hyperbolic_line(start, end)
     if edge["type"] == "line":
-        return add_spherical_bulge(np.linspace(start, end, samples), visual_bulge)
+        return np.linspace(start, end, samples)
 
     start = np.asarray(start, dtype=float)
     end = np.asarray(end, dtype=float)
-    center = edge["center"]
+    center = np.asarray(edge["center"], dtype=float)
     radius = edge["radius"]
-    angle_start = np.arctan2(start[1] - center[1], start[0] - center[0])
-    angle_end = np.arctan2(end[1] - center[1], end[0] - center[0])
 
-    counter_clockwise_delta = (angle_end - angle_start) % (2 * np.pi)
-    clockwise_delta = counter_clockwise_delta - 2 * np.pi
-    candidates = (
-        _arc_points(center, radius, angle_start, angle_start + counter_clockwise_delta, samples),
-        _arc_points(center, radius, angle_start, angle_start + clockwise_delta, samples),
-    )
+    a_start = np.arctan2(start[1] - center[1], start[0] - center[0])
+    a_end = np.arctan2(end[1] - center[1], end[0] - center[0])
 
-    def arc_score(points):
-        radii = np.linalg.norm(points, axis=1)
-        outside_penalty = np.maximum(radii - 1.0, 0.0).sum() * 1000
-        return outside_penalty + radii.mean()
+    ccw_delta = (a_end - a_start) % (2 * np.pi)
+    cw_delta = ccw_delta - 2 * np.pi
 
-    return add_spherical_bulge(min(candidates, key=arc_score), visual_bulge)
+    theta_ccw = np.linspace(a_start, a_start + ccw_delta, samples)
+    theta_cw = np.linspace(a_start, a_start + cw_delta, samples)
+
+    pts_ccw = np.column_stack([center[0] + radius * np.cos(theta_ccw),
+                               center[1] + radius * np.sin(theta_ccw)])
+    pts_cw = np.column_stack([center[0] + radius * np.cos(theta_cw),
+                              center[1] + radius * np.sin(theta_cw)])
+
+    # Choose the arc that stays inside the unit disk
+    max_r_ccw = np.max(np.linalg.norm(pts_ccw, axis=1))
+    max_r_cw = np.max(np.linalg.norm(pts_cw, axis=1))
+    return pts_ccw if max_r_ccw <= max_r_cw else pts_cw
+
 
 def curved_polygon_path(poly, edge_samples=28):
     sampled_edges = []
@@ -149,7 +120,7 @@ def render_tessellation_mode():
             help="选择预置的双曲镶嵌类型。",
         )
         cfg = CONFIGS[config_key]
-        depth = st.slider("迭代次数", 1, 8, min(cfg["k"], 8), help="数值越大，图案层级越多，但生成也越慢。")
+        depth = st.slider("迭代次数", 1, 12, min(cfg["k"], 12), help="数值越大，图案层级越多，但生成也越慢。")
         fill_color = st.checkbox("填充颜色", True)
 
     with preview:
