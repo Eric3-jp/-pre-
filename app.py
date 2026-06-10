@@ -29,26 +29,67 @@ def get_tessellation(p: int, q: int, phi: float, depth: int):
     return hyperbolic_tessellation(p, q, phi, depth)
 
 
-def sample_hyperbolic_edge(start, end, samples=12):
-    edge = hyperbolic_line(start, end)
-    if edge["type"] == "line":
-        return np.linspace(start, end, samples)
-
-    center = edge["center"]
-    radius = edge["radius"]
-    angle_start, angle_end = edge["angles"]
+def _arc_points(center, radius, angle_start, angle_end, samples):
     theta = np.linspace(angle_start, angle_end, samples)
-    points = np.column_stack([
+    return np.column_stack([
         center[0] + radius * np.cos(theta),
         center[1] + radius * np.sin(theta),
     ])
 
-    if np.linalg.norm(points[0] - np.asarray(start)) > np.linalg.norm(points[-1] - np.asarray(start)):
-        points = points[::-1]
-    return points
+def add_spherical_bulge(points, strength=0.045):
+    points = np.asarray(points, dtype=float)
+    midpoint = points[len(points) // 2]
+    direction = midpoint.copy()
+    direction_norm = np.linalg.norm(direction)
+    if direction_norm < 1e-8:
+        chord = points[-1] - points[0]
+        direction = np.array([-chord[1], chord[0]], dtype=float)
+        direction_norm = np.linalg.norm(direction)
+    if direction_norm < 1e-8:
+        return points
+
+    direction = direction / direction_norm
+    weights = np.sin(np.linspace(0, np.pi, len(points)))[:, None]
+    radii = np.linalg.norm(points, axis=1)
+    available_space = max(0.0, 0.995 - float(radii.max()))
+    bulge = min(strength, available_space * 0.85)
+    bulged = points + weights * direction * bulge
+
+    bulged_radii = np.linalg.norm(bulged, axis=1)
+    outside = bulged_radii > 0.995
+    if np.any(outside):
+        bulged[outside] *= (0.995 / bulged_radii[outside])[:, None]
+    return bulged
 
 
-def curved_polygon_path(poly, edge_samples=12):
+
+def sample_hyperbolic_edge(start, end, samples=28, visual_bulge=0.045):
+    edge = hyperbolic_line(start, end)
+    if edge["type"] == "line":
+        return add_spherical_bulge(np.linspace(start, end, samples), visual_bulge)
+
+    start = np.asarray(start, dtype=float)
+    end = np.asarray(end, dtype=float)
+    center = edge["center"]
+    radius = edge["radius"]
+    angle_start = np.arctan2(start[1] - center[1], start[0] - center[0])
+    angle_end = np.arctan2(end[1] - center[1], end[0] - center[0])
+
+    counter_clockwise_delta = (angle_end - angle_start) % (2 * np.pi)
+    clockwise_delta = counter_clockwise_delta - 2 * np.pi
+    candidates = (
+        _arc_points(center, radius, angle_start, angle_start + counter_clockwise_delta, samples),
+        _arc_points(center, radius, angle_start, angle_start + clockwise_delta, samples),
+    )
+
+    def arc_score(points):
+        radii = np.linalg.norm(points, axis=1)
+        outside_penalty = np.maximum(radii - 1.0, 0.0).sum() * 1000
+        return outside_penalty + radii.mean()
+
+    return add_spherical_bulge(min(candidates, key=arc_score), visual_bulge)
+
+def curved_polygon_path(poly, edge_samples=28):
     sampled_edges = []
     for index, start in enumerate(poly):
         end = poly[(index + 1) % len(poly)]
