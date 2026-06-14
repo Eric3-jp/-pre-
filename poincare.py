@@ -1,4 +1,3 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon
@@ -8,9 +7,10 @@ import warnings
 import sys
 
 # Constant macro: whether to fill polygons with color
-FILL_COLOR = False
+# 提示：如果你想要带颜色的填充效果，请将这里改为 True
+FILL_COLOR = True
 # Constant macro: whether to generate STL model
-CREATE_MODEL = True
+CREATE_MODEL = False # 仅作绘图测试可先关闭STL生成
 # Constant macro: size of the border lines
 BORDER_SIZE = 0.02
 
@@ -37,9 +37,6 @@ CONFIGS = {
 }
 
 def ortho_centre(p, q):
-    """
-    Compute the center of the circle passing through p and q that is orthogonal to the unit circle.
-    """
     px, py = p
     qx, qy = q
     d = 2 * (px * qy - py * qx)
@@ -52,9 +49,6 @@ def ortho_centre(p, q):
     return np.array([cx, cy]) / d
 
 def ortho_radius(p, q):
-    """
-    Compute the radius of the circle passing through p and q that is orthogonal to the unit circle.
-    """
     px, py = p
     qx, qy = q
     if abs(px * qy - py * qx) < 1e-12:
@@ -63,9 +57,6 @@ def ortho_radius(p, q):
     return np.sqrt(np.sum(c**2) - 1)
 
 def ortho_angles(p, q):
-    """
-    Compute the angles of the arc from p to q on the orthogonal circle.
-    """
     c = ortho_centre(p, q)
     p_rel = np.array(p) - c
     q_rel = np.array(q) - c
@@ -81,12 +72,9 @@ def ortho_angles(p, q):
     return (a, b)
 
 def hyperbolic_line(p, q):
-    """
-    Represent the hyperbolic line between two points p and q as either a line segment or a circular arc.
-    Returns a dictionary with type ('line' or 'circle') and parameters.
-    """
     px, py = p
     qx, qy = q
+    # 共线且过原点，视为直线
     if abs(px * qy - py * qx) < 1e-12:
         return {'type': 'line', 'points': [p, q]}
     c = ortho_centre(p, q)
@@ -94,11 +82,27 @@ def hyperbolic_line(p, q):
     angles = ortho_angles(p, q)
     return {'type': 'circle', 'center': c, 'radius': r, 'angles': angles}
 
+# 新增核心函数：获取测地线（圆弧）上的密集采样点
+def get_geodesic_arc(p, q, num_points=25):
+    """获取两点之间双曲测地线（圆弧或直线）上的采样点"""
+    hl = hyperbolic_line(p, q)
+    if hl['type'] == 'line':
+        return np.linspace(p, q, num_points)
+    else:
+        c = hl['center']
+        r = hl['radius']
+        a1 = np.arctan2(p[1] - c[1], p[0] - c[0])
+        a2 = np.arctan2(q[1] - c[1], q[0] - c[0])
+        
+        # 寻找两点间的最短角度路径（因为圆在单位圆盘内的那段弧对应的圆心角始终小于 pi）
+        diff = (a2 - a1) % (2 * np.pi)
+        if diff > np.pi:
+            diff -= 2 * np.pi
+            
+        theta = a1 + np.linspace(0, diff, num_points)
+        return np.column_stack((c[0] + r * np.cos(theta), c[1] + r * np.sin(theta)))
+
 def inversion_circle(circle, point):
-    """
-    Invert a point about a circle.
-    circle: {'center': (cx, cy), 'radius': r}
-    """
     cx, cy = circle['center']
     r = circle['radius']
     px, py = point
@@ -109,10 +113,6 @@ def inversion_circle(circle, point):
     return inv
 
 def inversion_line(line, point):
-    """
-    Invert a point about a line (represented by two points).
-    line: [(x1, y1), (x2, y2)]
-    """
     (x1, y1), (x2, y2) = line
     u = x1 - x2
     v = y2 - y1
@@ -125,9 +125,6 @@ def inversion_line(line, point):
     return np.array([inv_x, inv_y]) / denom
 
 def inversion(geo_obj, point):
-    """
-    Invert a point about a geometric object (circle or line).
-    """
     if isinstance(geo_obj, dict):
         if geo_obj['type'] == 'circle':
             return inversion_circle({'center': geo_obj['center'], 'radius': geo_obj['radius']}, point)
@@ -138,10 +135,6 @@ def inversion(geo_obj, point):
     raise ValueError("Unsupported geometric object for inversion")
 
 def invert_polygon(polygon_vertices):
-    """
-    Invert a polygon about each of its edges (hyperbolic lines).
-    Returns a list of new polygons.
-    """
     new_polygons = []
     n = len(polygon_vertices)
     for i in range(n):
@@ -153,12 +146,6 @@ def invert_polygon(polygon_vertices):
     return new_polygons
 
 def central_polygon(p, q, phi=0.0):
-    """
-    Generate the initial central polygon for tessellation {p, q}.
-    p: number of sides of the polygon
-    q: number of polygons meeting at each vertex
-    phi: rotation angle (radians)
-    """
     cot_p = 1 / np.tan(np.pi / p)
     cot_q = 1 / np.tan(np.pi / q)
     numerator = cot_p * cot_q - 1
@@ -167,16 +154,12 @@ def central_polygon(p, q, phi=0.0):
     theta = np.pi * np.arange(1, 2*p, 2) / p
     x = r * np.cos(theta)
     y = r * np.sin(theta)
-    # Apply rotation
     rot_matrix = np.array([[np.cos(phi), -np.sin(phi)],
                            [np.sin(phi),  np.cos(phi)]])
     vertices = rot_matrix @ np.array([x, y])
     return list(vertices.T)
 
 def polygon_key(polygon_vertices, tol=1e-7):
-    """
-    Build an orientation-insensitive key for approximate polygon de-duplication.
-    """
     decimals = max(0, int(-np.log10(tol)))
     rounded = [tuple(np.round(v, decimals)) for v in polygon_vertices]
     candidates = []
@@ -186,43 +169,14 @@ def polygon_key(polygon_vertices, tol=1e-7):
             candidates.append(tuple(seq[shift:] + seq[:shift]))
     return min(candidates)
 
-
-def polygon_round(polygon_vertices, tol=1e-7):
-    """
-    Round polygon vertices to tolerance.
-    """
-    return [tuple(np.round(v, int(-np.log10(tol)))) for v in polygon_vertices]
-
-def polygon_union(polygons, tol=1e-7):
-    """
-    Remove duplicate polygons from a list.
-    """
-    if not isinstance(polygons, list):
-        return [polygons]
-    unique = []
-    seen = set()
-    for poly in polygons:
-        key = polygon_key(poly, tol)
-        if key not in seen:
-            seen.add(key)
-            unique.append(poly)
-    return unique
-
-
 def polygon_is_expandable(poly, expand_radius=0.9999):
-    """A polygon is expandable as long as at least one vertex is inside the unit disk."""
     vertices = np.asarray(poly, dtype=float)
     if not np.all(np.isfinite(vertices)):
         return False
     vertex_norms = np.linalg.norm(vertices, axis=1)
     return np.any(vertex_norms < expand_radius)
 
-
 def hyperbolic_tessellation(p, q, phi=0.0, k=3, tol=1e-7, expand_radius=0.9999):
-    """
-    Generate hyperbolic tessellation {p, q} up to recursion depth k.
-    Uses frontier expansion so old polygons are not repeatedly expanded.
-    """
     initial = central_polygon(p, q, phi)
     all_polygons = [initial]
     frontier = [initial]
@@ -233,62 +187,71 @@ def hyperbolic_tessellation(p, q, phi=0.0, k=3, tol=1e-7, expand_radius=0.9999):
         for poly in frontier:
             if not polygon_is_expandable(poly, expand_radius):
                 continue
-
             for candidate in invert_polygon(poly):
                 if not polygon_is_expandable(candidate, expand_radius=1.2):
                     continue
-
                 key = polygon_key(candidate, tol)
                 if key in seen:
                     continue
-
                 seen.add(key)
                 all_polygons.append(candidate)
                 next_frontier.append(candidate)
-
         if not next_frontier:
             break
         frontier = next_frontier
-
     return all_polygons
 
+# 修改后的绘图函数
 def plot_tessellation(p, q, phi=0.0, k=3, colormap='viridis', use_hyperbolic_lines=True, ax=None):
-    """
-    Plot the hyperbolic tessellation.
-    """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 8))
+        fig, ax = plt.subplots(figsize=(10, 10))
         ax.set_aspect('equal')
         ax.axis('off')
-    # Scale BORDER_SIZE for matplotlib linewidth (since linewidth is in points, not world units)
+        
     linewidth = max(0.5, BORDER_SIZE * 20)
-    # Draw unit circle
-    unit_circle = Circle((0, 0), 1, fill=False, edgecolor='black', linewidth=linewidth)
+    unit_circle = Circle((0, 0), 1, fill=False, edgecolor='black', linewidth=linewidth*2)
     ax.add_patch(unit_circle)
-    # Get polygons
+    
     polygons = hyperbolic_tessellation(p, q, phi, k)
-    # Plot each polygon
     patches = []
+    
     for poly in polygons:
-        # Check if polygon is inside unit circle
         centroid = np.mean(poly, axis=0)
+        # 抛弃生成过程中越界的异常多边形
         if np.linalg.norm(centroid) > 1.2:
             continue
-        # Color based on centroid distance (only if FILL_COLOR is True)
+            
         if FILL_COLOR:
             color_val = np.linalg.norm(centroid)
             cmap = plt.get_cmap(colormap)
             face_color = cmap(color_val)
         else:
             face_color = 'none'
-        # Create polygon patch
-        poly_patch = Polygon(poly, closed=True, facecolor=face_color, edgecolor='black', linewidth=linewidth)
+            
+        # -- 关键逻辑：将原本的直角多边形替换为测地线（圆弧）多边形 --
+        if use_hyperbolic_lines:
+            curved_poly = []
+            n = len(poly)
+            for i in range(n):
+                p1 = poly[i]
+                p2 = poly[(i+1)%n]
+                # 沿每条测地线采集25个点以拟合圆弧
+                arc_points = get_geodesic_arc(p1, p2, num_points=25)
+                # 舍弃最后一个点以防止与下一条弧的起点重复
+                curved_poly.extend(arc_points[:-1])
+            poly_to_draw = curved_poly
+        else:
+            poly_to_draw = poly
+
+        poly_patch = Polygon(poly_to_draw, closed=True, facecolor=face_color, edgecolor='black', linewidth=linewidth)
         patches.append(poly_patch)
-    # Add patches to axis
+        
     collection = PatchCollection(patches, match_original=True)
     ax.add_collection(collection)
-    ax.set_xlim(-1.1, 1.1)
-    ax.set_ylim(-1.1, 1.1)
+    
+    # 稍微留一点边距以便看清单位圆的边界
+    ax.set_xlim(-1.05, 1.05)
+    ax.set_ylim(-1.05, 1.05)
     return ax
 
 if __name__ == '__main__':
@@ -300,8 +263,9 @@ if __name__ == '__main__':
         print(f"Error: Invalid config '{config_key}'. Available options: {list(CONFIGS.keys())}")
         sys.exit(1)
     cfg = CONFIGS[config_key]
-    polygons = hyperbolic_tessellation(cfg['p'], cfg['q'], k=cfg['k'])
+    
     if CREATE_MODEL:
+        polygons = hyperbolic_tessellation(cfg['p'], cfg['q'], k=cfg['k'])
         import stlgen
         stl_filename = f"poincare_{config_key}.stl"
         stlgen.generate_stl(
@@ -311,6 +275,7 @@ if __name__ == '__main__':
             ring_inrad=cfg['ring_inrad']
         )
         print(f"STL file generated: {stl_filename}")
+        
     ax = plot_tessellation(cfg['p'], cfg['q'], k=cfg['k'], colormap='viridis')
-    plt.title("Tessellation")
+    plt.title(f"Poincare Disk Tessellation {{{cfg['p']}, {cfg['q']}}}")
     plt.show()

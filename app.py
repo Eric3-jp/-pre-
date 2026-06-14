@@ -267,34 +267,29 @@ def render_image_mode():
         )
         zoom = st.slider("镜头缩放", 0.5, 1.5, 1.0, 0.05, help="控制鱼眼镜头覆盖范围。")
         show_original = st.checkbox("显示原始图片", False)
+        local_default_path = os.path.join(os.path.dirname(__file__), "901da0b2f8d81d76b55aeab206f5ca01.png")
 
     with preview:
         st.subheader("处理结果")
-        # If user didn't upload a file, try to load a default image placed in the repository root
-        # app.py is inside the `poincare/` folder, so the image (placed next to the repository root)
-        # can be referenced via a relative path. We'll resolve an absolute path for robustness.
-        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        default_image_name = "901da0b2f8d81d76b55aeab206f5ca01.png"
-        local_default_path = os.path.join(repo_root, default_image_name)
-
-        if uploaded_file is None:
-            if os.path.exists(local_default_path):
-                try:
-                    image = Image.open(local_default_path).convert("RGB")
-                    image_array = np.array(image)
-                    st.caption(f"正在使用仓库中的默认图片：{local_default_path}")
-                except Exception as exc:
-                    st.error(f"无法打开仓库中的默认图片：{exc}")
-                    return
-            else:
-                st.info("请上传一张图片，或将默认图片放到仓库根目录并重试。")
-                return
-        else:
+        # Decide which image to use: uploaded file or default image
+        if uploaded_file is not None:
             try:
                 image = Image.open(uploaded_file).convert("RGB")
                 image_array = np.array(image)
             except Exception as exc:
                 st.error(f"无法读取上传的图片：{exc}")
+                return
+        else:
+            if os.path.exists(local_default_path):
+                try:
+                    image = Image.open(local_default_path).convert("RGB")
+                    image_array = np.array(image)
+                    st.caption("正在使用默认图片")
+                except Exception as exc:
+                    st.error(f"无法打开默认图片：{exc}")
+                    return
+            else:
+                st.info("请上传一张图片。")
                 return
 
         try:
