@@ -7,6 +7,7 @@ from matplotlib.collections import PatchCollection
 from matplotlib.path import Path
 from matplotlib.patches import Circle, PathPatch
 from PIL import Image
+import os
 
 from plotter import plot_fisheye_lines
 from poincare import CONFIGS, hyperbolic_line, hyperbolic_tessellation
@@ -260,7 +261,7 @@ def render_image_mode():
             "鱼眼强度",
             0.0,
             4.0,
-            1.6,
+            1.5,
             0.1,
             help="0 表示不变形；数值越大，中心膨胀和边缘压缩越明显。",
         )
@@ -269,16 +270,36 @@ def render_image_mode():
 
     with preview:
         st.subheader("处理结果")
+        # If user didn't upload a file, try to load a default image placed in the repository root
+        # app.py is inside the `poincare/` folder, so the image (placed next to the repository root)
+        # can be referenced via a relative path. We'll resolve an absolute path for robustness.
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+        default_image_name = "901da0b2f8d81d76b55aeab206f5ca01.png"
+        local_default_path = os.path.join(repo_root, default_image_name)
+
         if uploaded_file is None:
-            st.info("请上传一张图片。")
-            return
+            if os.path.exists(local_default_path):
+                try:
+                    image = Image.open(local_default_path).convert("RGB")
+                    image_array = np.array(image)
+                    st.caption(f"正在使用仓库中的默认图片：{local_default_path}")
+                except Exception as exc:
+                    st.error(f"无法打开仓库中的默认图片：{exc}")
+                    return
+            else:
+                st.info("请上传一张图片，或将默认图片放到仓库根目录并重试。")
+                return
+        else:
+            try:
+                image = Image.open(uploaded_file).convert("RGB")
+                image_array = np.array(image)
+            except Exception as exc:
+                st.error(f"无法读取上传的图片：{exc}")
+                return
 
         try:
-            image = Image.open(uploaded_file).convert("RGB")
-            image_array = np.array(image)
-
-            if show_original:
-                st.image(image, caption="原始图片", use_container_width=True)
+            if show_original and 'image' in locals():
+                st.image(Image.fromarray(image_array), caption="原始图片", use_container_width=True)
 
             with st.spinner("正在生成真实鱼眼图片..."):
                 fisheye_image = apply_fisheye_to_image(
